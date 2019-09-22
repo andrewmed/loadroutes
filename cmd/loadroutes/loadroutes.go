@@ -21,7 +21,9 @@ var (
 )
 
 func main() {
-	log.Printf("loadroutes %s %s\n", version, date)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	log.Println("Loadroutes", version, date)
 
 	iface := flag.String("iface", "", "Network interface name.")
 	filename := flag.String("dump", "", "Path to a dump file (see https://github.com/zapret-info/z-i).")
@@ -33,7 +35,7 @@ func main() {
 	}
 
 	log.Printf("Using dump file: %s", *filename)
-	log.Printf("Adding to %s", *iface)
+	log.Printf("Adding to %s:", *iface)
 
 	file, err := os.Open(*filename)
 	if err != nil {
@@ -43,7 +45,7 @@ func main() {
 
 	link, err := netlink.LinkByName(*iface)
 	if err != nil {
-		log.Fatalf("No such network interface: %v.\n", iface)
+		log.Fatalf("No such network interface: %v.", iface)
 	}
 
 	reader := transform.NewReader(file, charmap.Windows1251.NewDecoder())
@@ -69,4 +71,5 @@ func main() {
 			}
 		}
 	}
+	log.Printf("%d routed/ranges loaded", done)
 }

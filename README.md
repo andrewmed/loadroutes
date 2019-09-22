@@ -9,7 +9,7 @@ Why not just set up a default gateway for a tunnel? Because it redirects all of 
 
 #### Test
 - Clone repo with `git clone https://github.com/andrewmed/loadroutes.git`
-- Run test with `make test`. Test downloads real dump from  [https://github.com/zapret-info/z-i] and loads routes to a new virtual eth (no actual interfaces affected), then ip route stats is printed, veth is deleted at the end
+- Run test with `make test`. Test downloads real dump from  [https://github.com/zapret-info/z-i] and loads routes to a new virtual eth (no actual interfaces affected), root required, then ip route stats is printed, veth is deleted at the end
 
 #### Install
 Install with `go get github.com/andrewmed/loadroutes/...`

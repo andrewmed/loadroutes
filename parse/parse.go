@@ -42,13 +42,13 @@ func Parse(reader *bufio.Reader) []*net.IPNet {
 			if strings.Contains(addr, "/") {
 				_, ipNet, err = net.ParseCIDR(addr)
 				if err != nil {
-					log.Printf("Line %d: %s\n", line, err)
+					log.Printf("Line %d: %s", line, err)
 					continue
 				}
 			} else {
 				ip := net.ParseIP(addr)
 				if ip == nil {
-					log.Printf("Line %d: %s\n", line, err)
+					log.Printf("Line %d: %s", line, err)
 					continue
 				}
 				if ip.To4() == nil {

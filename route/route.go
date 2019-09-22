@@ -15,7 +15,7 @@ func AddIP(link netlink.Link, ip *net.IPNet) error {
 	}
 	if err := netlink.RouteReplace(&route); err != nil {
 		if os.IsPermission(err) {
-			log.Fatal("Root privileges are needed to update routing table.\n")
+			log.Fatal("Root privileges are needed to update routing table.")
 		}
 		return err
 	}
