@@ -18,7 +18,6 @@ import (
 var (
 	version = "unknown"
 	date    = "unknown"
-	debug   = false
 )
 
 func main() {
@@ -28,7 +27,7 @@ func main() {
 
 	iface := flag.String("iface", "", "Network interface name.")
 	filename := flag.String("dump", "", "Path to a dump file (see https://github.com/zapret-info/z-i).")
-	ipv6 := flag.Bool("ipv6", false, "Process IPv6 addresses as well (by default, disabled)")
+	ipv6 := flag.Bool("ipv6", false, "Process IPv6 addresses as well (by default, disabled).")
 
 	flag.Parse()
 	if *iface == "" || *filename == "" {
@@ -76,5 +75,5 @@ func main() {
 			}
 		}
 	}
-	log.Printf("%d routed/ranges loaded", done)
+	log.Printf("%d routes/ranges loaded", done)
 }

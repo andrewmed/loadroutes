@@ -10,7 +10,7 @@ import (
 
 var line int
 
-// Parse parses all addresses/ranges on a line, if EOF return empty slice
+// Parse parses all addresses/ranges on a line, if EOF returns empty slice
 func Parse(reader *bufio.Reader) []*net.IPNet {
 
 	var addresses []*net.IPNet
