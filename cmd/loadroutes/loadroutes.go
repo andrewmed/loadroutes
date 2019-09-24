@@ -18,6 +18,7 @@ import (
 var (
 	version = "unknown"
 	date    = "unknown"
+	debug   = false
 )
 
 func main() {
