@@ -28,6 +28,7 @@ func main() {
 
 	iface := flag.String("iface", "", "Network interface name.")
 	filename := flag.String("dump", "", "Path to a dump file (see https://github.com/zapret-info/z-i).")
+	ipv6 := flag.Bool("ipv6", false, "Process IPv6 addresses as well (by default, disabled)")
 
 	flag.Parse()
 	if *iface == "" || *filename == "" {
@@ -61,7 +62,10 @@ func main() {
 		}
 
 		for _, ipNet := range ips {
-			ip := (*ipNet).IP // hack, because add method nullifies struct
+			ip := (*ipNet).IP // hack, because AddIP nullifies struct
+			if !*ipv6 && ip.To4() == nil {
+				continue
+			}
 			if err := route.AddIP(link, ipNet); err != nil {
 				log.Printf("Adding %v: %s", ip, err)
 				continue

@@ -14,7 +14,6 @@ var line int
 func Parse(reader *bufio.Reader) []*net.IPNet {
 
 	var addresses []*net.IPNet
-	var ipv6 bool
 
 	for {
 		s, err := reader.ReadString('\n')
@@ -30,8 +29,6 @@ func Parse(reader *bufio.Reader) []*net.IPNet {
 		if strings.HasPrefix(s, "Updated:") {
 			continue
 		}
-
-		ipv6 = false
 
 		tokens := strings.Split(s, ";")
 		rawAddresses := strings.Split(tokens[0], "|")
@@ -54,11 +51,7 @@ func Parse(reader *bufio.Reader) []*net.IPNet {
 					log.Printf("Line %d: %s", line, err)
 					continue
 				}
-				// silently skip ipv6
-				if ip.To4() == nil {
-					ipv6 = true
-					continue
-				}
+
 				ipNet = &net.IPNet{
 					IP:   ip,
 					Mask: net.IPMask{255, 255, 255, 255},
@@ -66,9 +59,6 @@ func Parse(reader *bufio.Reader) []*net.IPNet {
 			}
 			addresses = append(addresses, ipNet)
 		}
-		// skip lines with only IPv6 addresses
-		if len(addresses) > 0 || !ipv6 {
 			return addresses
-		}
 	}
 }
