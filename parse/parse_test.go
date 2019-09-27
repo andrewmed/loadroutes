@@ -15,15 +15,16 @@ const dump = `Updated: 2019-01-29 01:07:00 +0000
 
 func TestParse(t *testing.T) {
 	var processed int
+	names := make(map[string]struct{})
 	reader := bufio.NewReader(strings.NewReader(dump))
 	for {
-		inLine := Parse(reader)
+		inLine := Parse(reader, names)
 		if len(inLine) == 0 {
 			break
 		}
 		processed += len(inLine)
 	}
-	if processed != 10 {
-		t.Error("Error parsing dump file")
+	if processed != 10 || len(names) != 2 {
+		t.Errorf("Error parsing dump file: %v, %v", processed, names)
 	}
 }

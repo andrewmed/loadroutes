@@ -11,7 +11,7 @@ import (
 var line int
 
 // Parse parses all addresses/ranges on a line, if EOF returns empty slice
-func Parse(reader *bufio.Reader) []*net.IPNet {
+func Parse(reader *bufio.Reader, names map[string]struct{}) []*net.IPNet {
 
 	var addresses []*net.IPNet
 
@@ -31,6 +31,11 @@ func Parse(reader *bufio.Reader) []*net.IPNet {
 		}
 
 		tokens := strings.Split(s, ";")
+		if names != nil && len(tokens) >  1 {
+			if name := strings.TrimSpace(tokens[1]); len(name) > 0 {
+				names[name] = struct{}{}
+			}
+		}
 		rawAddresses := strings.Split(tokens[0], "|")
 		var ipNet *net.IPNet
 		for _, rawAddress := range rawAddresses {

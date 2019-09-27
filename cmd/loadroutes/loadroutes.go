@@ -5,6 +5,7 @@ package main
 import (
 	"bufio"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 
@@ -20,42 +21,56 @@ var (
 	date    = "unknown"
 )
 
+const DNS = "8.8.8.8"
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	log.Println("Loadroutes", version, date)
 
 	iface := flag.String("iface", "", "Network interface name.")
-	filename := flag.String("dump", "", "Path to a dump file (see https://github.com/zapret-info/z-i).")
+	dumpPath := flag.String("dump", "", "Path to a dump file (see https://github.com/zapret-info/z-i).")
+	namesPath := flag.String("names", "", "Save extracted domain names to a specified file (optional).")
 	ipv6 := flag.Bool("ipv6", false, "Process IPv6 addresses as well (by default, disabled).")
 
 	flag.Parse()
-	if *iface == "" || *filename == "" {
+	if *iface == "" || *dumpPath == "" {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	log.Printf("Using dump file: %s", *filename)
+	log.Printf("Using dump file: %s", *dumpPath)
 	log.Printf("Adding to %s:", *iface)
 
-	file, err := os.Open(*filename)
+	dumpFile, err := os.Open(*dumpPath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer file.Close()
+	defer dumpFile.Close()
 
 	link, err := netlink.LinkByName(*iface)
 	if err != nil {
 		log.Fatalf("No such network interface: %v.", iface)
 	}
 
-	reader := transform.NewReader(file, charmap.Windows1251.NewDecoder())
-	bReader := bufio.NewReader(reader)
+	dumpReader := transform.NewReader(dumpFile, charmap.Windows1251.NewDecoder())
+	bDumpReader := bufio.NewReader(dumpReader)
+
+	var names map[string]struct{}
+	var namesFile *os.File
+	if *namesPath != "" {
+		namesFile, err = os.Create(*namesPath)
+		if err != nil {
+			log.Fatalf("Could not open %s for saving domain names: %s.", *namesPath, err)
+		}
+		defer namesFile.Close()
+		names = make(map[string]struct{}, 150000) // preallocate
+	}
 
 	var done int
 
 	for {
-		ips := parse.Parse(bReader)
+		ips := parse.Parse(bDumpReader, names)
 		if len(ips) == 0 {
 			break // EOF
 		}
@@ -75,5 +90,17 @@ func main() {
 			}
 		}
 	}
+
 	log.Printf("%d routes/ranges loaded", done)
+
+	if namesFile != nil {
+		for k, _ := range names {
+			line := fmt.Sprintf("server=/%s/%s\n", k, DNS)
+			_, err := namesFile.WriteString(line)
+			if err != nil {
+				log.Fatalf("Could not save to %s: %s.", *namesPath, err)
+			}
+		}
+		log.Printf("%d domain names extracted to %s", len(names), namesFile.Name())
+	}
 }
