@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/text/encoding/charmap"
@@ -95,6 +96,7 @@ func main() {
 
 	if namesFile != nil {
 		for k, _ := range names {
+			k := strings.TrimPrefix(k, "*")
 			line := fmt.Sprintf("server=/%s/%s\n", k, DNS)
 			_, err := namesFile.WriteString(line)
 			if err != nil {
