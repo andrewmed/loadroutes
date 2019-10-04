@@ -31,7 +31,7 @@ func Parse(reader *bufio.Reader, names map[string]struct{}) []*net.IPNet {
 		}
 
 		tokens := strings.Split(s, ";")
-		if names != nil && len(tokens) >  1 {
+		if names != nil && len(tokens) > 1 {
 			if name := strings.TrimSpace(tokens[1]); len(name) > 0 {
 				names[name] = struct{}{}
 			}
@@ -40,7 +40,7 @@ func Parse(reader *bufio.Reader, names map[string]struct{}) []*net.IPNet {
 		var ipNet *net.IPNet
 		for _, rawAddress := range rawAddresses {
 			addr := strings.Trim(rawAddress, " ")
-			if len(addr) < 4 { // some lines are just broken
+			if len(addr) == 0 {
 				continue
 			}
 
@@ -53,7 +53,7 @@ func Parse(reader *bufio.Reader, names map[string]struct{}) []*net.IPNet {
 			} else {
 				ip := net.ParseIP(addr)
 				if ip == nil {
-					log.Printf("Line %d: %s", line, err)
+					log.Printf("Line %d: %s", line, s)
 					continue
 				}
 
@@ -64,6 +64,8 @@ func Parse(reader *bufio.Reader, names map[string]struct{}) []*net.IPNet {
 			}
 			addresses = append(addresses, ipNet)
 		}
+		if len(addresses) > 0 {
 			return addresses
+		}
 	}
 }
