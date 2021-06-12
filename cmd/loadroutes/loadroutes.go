@@ -22,7 +22,7 @@ var (
 	date    = "unknown"
 )
 
-const DNS = "8.8.8.8"
+const DNS = "8.8.4.4"
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
