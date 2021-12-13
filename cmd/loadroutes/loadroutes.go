@@ -30,7 +30,7 @@ const DNS_TIMEOUT_SEC = 1
 
 var done int
 
-func add(iface netlink.Link, ips []*net.IPNet, ip6 bool) {
+func add(iface netlink.Link, ips []*net.IPNet, ip6 bool, logRadix int) {
 	for _, ipNet := range ips {
 		ip := (*ipNet).IP // hack for error reporting because AddIP nullifies struct after call
 		if !ip6 && ip.To4() == nil {
@@ -42,7 +42,7 @@ func add(iface netlink.Link, ips []*net.IPNet, ip6 bool) {
 		}
 
 		done++
-		if done%100000 == 0 {
+		if done%logRadix == 0 {
 			log.Println(done)
 		}
 	}
@@ -53,10 +53,10 @@ func main() {
 
 	log.Println("Loadroutes", version, date)
 
-	ifaceName := flag.String("iface", "", "Network interface name.")
-	input := flag.String("input", "", "Path to input dump file (see https://github.com/zapret-info/z-i).")
-	dnsName := flag.String("dns", "", "DNS server.")
-	ip6 := flag.Bool("ip6", false, "Process IPv6 addresses as well (by default, disabled).")
+	ifaceName := flag.String("iface", "", "Network interface name (required)")
+	input := flag.String("input", "", "Path to input dump file (see https://github.com/zapret-info/z-i) (required)")
+	dnsName := flag.String("dns", "", "DNS server (if not specified no DNS resolution performed)")
+	ip6 := flag.Bool("ip6", false, "Process IPv6 addresses as well (if not specified, IPv4 is used only)")
 
 	flag.Parse()
 
@@ -83,10 +83,10 @@ func main() {
 
 	iface, err := netlink.LinkByName(*ifaceName)
 	if err != nil {
-		log.Fatalf("No such network interface: %s", ifaceName)
+		log.Fatalf("No such network interface: %s", *ifaceName)
 	}
 
-	add(iface, ips, *ip6)
+	add(iface, ips, *ip6, 100000)
 
 	if *dnsName == "" {
 		return
@@ -109,14 +109,18 @@ func main() {
 		return len(namesSlice[i]) < len(namesSlice[j])
 	})
 
+	var resolutionErrs int
 	for _, name := range namesSlice {
 		ctx, cancelFn := context.WithTimeout(context.Background(), time.Second*DNS_TIMEOUT_SEC)
 		defer cancelFn()
 		ips, err := resolver.Resolve(ctx, &dnsResolver, name, *ip6)
 		if err != nil {
-			log.Printf("Resolving %s: %s", name, err)
+			resolutionErrs++
+			if resolutionErrs%100 == 0 {
+				log.Printf("DNS resolution errors so far: %d, last error: %s", resolutionErrs, err)
+			}
 			continue
 		}
-		add(iface, ips, *ip6)
+		add(iface, ips, *ip6, 100)
 	}
 }

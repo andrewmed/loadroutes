@@ -13,12 +13,12 @@ test: build
 	sudo whoami
 	sudo ip link add veth42s type veth peer name veth42
 	sudo ip link set veth42s up
-	sudo ./loadroutes -iface veth42s -dump dump.csv
+	sudo ./loadroutes -iface veth42s -input dump.csv
 	ip r | wc -l
 	sudo ip link del veth42s
 
 install: build
-	cp loadroutes /usr/local/bin
+	sudo cp loadroutes /usr/local/bin
 
 clean:
 	go clean ./...
