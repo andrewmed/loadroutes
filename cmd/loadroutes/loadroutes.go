@@ -5,16 +5,20 @@ package main
 import (
 	"bufio"
 	"flag"
-	"fmt"
 	"log"
+	"net"
 	"os"
-	"strings"
+
+	"context"
+	"loadroutes/parse"
+	"loadroutes/resolver"
+	"loadroutes/route"
+	"sort"
+	"time"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/transform"
-	"loadroutes/parse"
-	"loadroutes/route"
 )
 
 var (
@@ -22,87 +26,97 @@ var (
 	date    = "unknown"
 )
 
-const DNS = "8.8.4.4"
+const DNS_TIMEOUT_SEC = 1
+
+var done int
+
+func add(iface netlink.Link, ips []*net.IPNet, ip6 bool) {
+	for _, ipNet := range ips {
+		ip := (*ipNet).IP // hack for error reporting because AddIP nullifies struct after call
+		if !ip6 && ip.To4() == nil {
+			continue
+		}
+		if err := route.AddIP(iface, ipNet); err != nil {
+			log.Printf("Adding %v: %s", ip, err)
+			continue
+		}
+
+		done++
+		if done%100000 == 0 {
+			log.Println(done)
+		}
+	}
+}
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	log.Println("Loadroutes", version, date)
 
-	iface := flag.String("iface", "", "Network interface name.")
-	dumpPath := flag.String("dump", "", "Path to a dump file (see https://github.com/zapret-info/z-i).")
-	namesPath := flag.String("names", "", "Save extracted domain names to a specified file (optional).")
-	ipv6 := flag.Bool("ipv6", false, "Process IPv6 addresses as well (by default, disabled).")
+	ifaceName := flag.String("iface", "", "Network interface name.")
+	input := flag.String("input", "", "Path to input dump file (see https://github.com/zapret-info/z-i).")
+	dnsName := flag.String("dns", "", "DNS server.")
+	ip6 := flag.Bool("ip6", false, "Process IPv6 addresses as well (by default, disabled).")
 
 	flag.Parse()
-	if *iface == "" || *dumpPath == "" {
+
+	if *ifaceName == "" || *input == "" {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	log.Printf("Using dump file: %s", *dumpPath)
-	log.Printf("Adding to %s:", *iface)
+	log.Printf("Input file: %s, iface: %s, DNS: %s\n", *input, *ifaceName, *dnsName)
+	if *dnsName == "" {
+		log.Println("No DNS server specified, DNS resolution will not be perfomed")
+	}
 
-	dumpFile, err := os.Open(*dumpPath)
+	file, err := os.Open(*input)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer dumpFile.Close()
+	defer file.Close()
 
-	link, err := netlink.LinkByName(*iface)
+	reader := bufio.NewReader(transform.NewReader(file, charmap.Windows1251.NewDecoder()))
+
+	ips, namesMap := parse.Parse(reader)
+	log.Printf("Parsed: ip addresses: %d, dns names: %d\n", len(ips), len(namesMap))
+
+	iface, err := netlink.LinkByName(*ifaceName)
 	if err != nil {
-		log.Fatalf("No such network interface: %v.", iface)
+		log.Fatalf("No such network interface: %s", ifaceName)
 	}
 
-	dumpReader := transform.NewReader(dumpFile, charmap.Windows1251.NewDecoder())
-	bDumpReader := bufio.NewReader(dumpReader)
+	add(iface, ips, *ip6)
 
-	var names map[string]struct{}
-	var namesFile *os.File
-	if *namesPath != "" {
-		namesFile, err = os.Create(*namesPath)
+	if *dnsName == "" {
+		return
+	}
+
+	dnsResolver := net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := net.Dialer{}
+			return d.DialContext(ctx, network, *dnsName+":53")
+		},
+	}
+
+	// resolve in order of domain length (on presumption that the shorter domain, the more important it is)
+	namesSlice := make([]string, 0, len(namesMap))
+	for name := range namesMap {
+		namesSlice = append(namesSlice, name)
+	}
+	sort.Slice(namesSlice, func(i, j int) bool {
+		return len(namesSlice[i]) < len(namesSlice[j])
+	})
+
+	for _, name := range namesSlice {
+		ctx, cancelFn := context.WithTimeout(context.Background(), time.Second*DNS_TIMEOUT_SEC)
+		defer cancelFn()
+		ips, err := resolver.Resolve(ctx, &dnsResolver, name, *ip6)
 		if err != nil {
-			log.Fatalf("Could not open %s for saving domain names: %s.", *namesPath, err)
+			log.Printf("Resolving %s: %s", name, err)
+			continue
 		}
-		defer namesFile.Close()
-		names = make(map[string]struct{}, 150000) // preallocate
-	}
-
-	var done int
-
-	for {
-		ips := parse.Parse(bDumpReader, names)
-		if len(ips) == 0 {
-			break // EOF
-		}
-
-		for _, ipNet := range ips {
-			ip := (*ipNet).IP // hack, because AddIP nullifies struct
-			if !*ipv6 && ip.To4() == nil {
-				continue
-			}
-			if err := route.AddIP(link, ipNet); err != nil {
-				log.Printf("Adding %v: %s", ip, err)
-				continue
-			}
-			done += 1
-			if done%100000 == 0 {
-				log.Println(done)
-			}
-		}
-	}
-
-	log.Printf("%d routes/ranges loaded", done)
-
-	if namesFile != nil {
-		for k, _ := range names {
-			k := strings.TrimPrefix(k, "*")
-			line := fmt.Sprintf("server=/%s/%s\n", k, DNS)
-			_, err := namesFile.WriteString(line)
-			if err != nil {
-				log.Fatalf("Could not save to %s: %s.", *namesPath, err)
-			}
-		}
-		log.Printf("%d domain names extracted to %s", len(names), namesFile.Name())
+		add(iface, ips, *ip6)
 	}
 }

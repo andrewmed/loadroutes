@@ -1,17 +1,18 @@
 package route
 
 import (
-	"log"
 	"net"
+	"log"
 	"os"
 
 	"github.com/vishvananda/netlink"
 )
 
-func AddIP(link netlink.Link, ip *net.IPNet) error {
+
+func AddIP(iface netlink.Link, ip *net.IPNet) error {
 	route := netlink.Route{
 		Dst:       ip,
-		LinkIndex: link.Attrs().Index,
+		LinkIndex: iface.Attrs().Index,
 	}
 	if err := netlink.RouteReplace(&route); err != nil {
 		if os.IsPermission(err) {

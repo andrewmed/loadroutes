@@ -30,9 +30,6 @@ Current format of dump file is processed in full without errors
 ### IPv6
 By default silently skips IPv6 addresses. To enable IPv6 support, add `-ipv6` flag.
 
-### Domain names extracting
-To extract domain names in dnsmasq format *server=/foo.tldn/8.8.8.8* add `-names` flag.
-
 ### Demo
 ![](demo.gif)
 

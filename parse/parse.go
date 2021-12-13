@@ -5,41 +5,43 @@ import (
 	"io"
 	"log"
 	"net"
+	"regexp"
 	"strings"
 )
 
-var line int
+// domains up to 9 letters only in com or org tldn
+// ("substantial" domains only)
+const REGEXP = `^((www\.)?[a-z]{1,9}\.com|org)$`
 
-// Parse parses all addresses/ranges on a line, if EOF returns empty slice
-func Parse(reader *bufio.Reader, names map[string]struct{}) []*net.IPNet {
+func Parse(reader *bufio.Reader) ([]*net.IPNet, map[string]struct{}) {
+	addresses := []*net.IPNet{}
+	names := map[string]struct{}{}
 
-	var addresses []*net.IPNet
+	re := regexp.MustCompile(REGEXP)
+
+	var line int
 
 	for {
 		s, err := reader.ReadString('\n')
 		if err == io.EOF {
-			return addresses
+			return addresses, names
 		}
 		if err != nil {
 			log.Fatal(err)
 		}
 		line++
 
-		// Validate line.
 		if strings.HasPrefix(s, "Updated:") {
 			continue
 		}
 
 		tokens := strings.Split(s, ";")
-		if names != nil && len(tokens) > 1 {
-			if name := strings.TrimSpace(tokens[1]); len(name) > 0 {
-				names[name] = struct{}{}
-			}
-		}
+
+		// extract IP address
 		rawAddresses := strings.Split(tokens[0], "|")
 		var ipNet *net.IPNet
 		for _, rawAddress := range rawAddresses {
-			addr := strings.Trim(rawAddress, " ")
+			addr := strings.TrimSpace(rawAddress)
 			if len(addr) == 0 {
 				continue
 			}
@@ -47,25 +49,29 @@ func Parse(reader *bufio.Reader, names map[string]struct{}) []*net.IPNet {
 			if strings.Contains(addr, "/") {
 				_, ipNet, err = net.ParseCIDR(addr)
 				if err != nil {
-					log.Printf("Line %d: %s", line, err)
+					log.Printf("Parsing line %d: %s", line, err)
 					continue
 				}
 			} else {
 				ip := net.ParseIP(addr)
 				if ip == nil {
-					log.Printf("Line %d: %s", line, s)
+					log.Printf("Parsing line %d: %s", line, s)
 					continue
 				}
-
 				ipNet = &net.IPNet{
 					IP:   ip,
-					Mask: net.IPMask{255, 255, 255, 255},
+					Mask: net.IPv4Mask(255, 255, 255, 255),
 				}
 			}
 			addresses = append(addresses, ipNet)
 		}
-		if len(addresses) > 0 {
-			return addresses
+
+		// extract DNS name
+		if name := strings.TrimSpace(strings.TrimSpace(tokens[1])); len(name) > 0 {
+			m := re.FindAllString(name, 2)
+			if len(m) > 0 {
+				names[m[0]] = struct{}{}
+			}
 		}
 	}
 }
