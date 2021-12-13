@@ -11,7 +11,7 @@ import (
 
 // domains up to 9 letters only in com or org tldn
 // ("substantial" domains only)
-const REGEXP = `^((www\.)?[a-z]{1,9}\.com|org)$`
+const REGEXP = `^((www\.)?[a-z]{1,9}\.(com|org))$`
 
 func Parse(reader *bufio.Reader) ([]*net.IPNet, map[string]struct{}) {
 	addresses := []*net.IPNet{}

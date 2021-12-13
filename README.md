@@ -23,7 +23,7 @@ loadroutes -iface $1 -dump /path/to/dump.csv
 ```
 ### Error handling
 - On fatal error (io, permissions) exits immediately
-- On parsing/loading route error logs to stderr the violating line and continues.
+- On parsing/name resolution error logs to stderr the violating line and continues.
 
 Current format of dump file is processed in full without errors
 
