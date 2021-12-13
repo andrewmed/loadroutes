@@ -28,7 +28,7 @@ loadroutes -iface $1 -dump /path/to/dump.csv
 Current format of dump file is processed in full without errors
 
 ### IPv6
-By default silently skips IPv6 addresses. To enable IPv6 support, add `-ipv6` flag.
+By default silently skips IPv6 addresses. To enable IPv6 support, add `-ip6` flag.
 
 ### Demo
 ![](demo.gif)
