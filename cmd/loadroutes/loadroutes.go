@@ -6,19 +6,18 @@ import (
 	"bufio"
 	"flag"
 	"log"
-	"net"
 	"os"
+	"sync"
 
-	"context"
 	"loadroutes/parse"
 	"loadroutes/resolver"
-	"loadroutes/route"
 	"sort"
-	"time"
+	"net"
 
-	"github.com/vishvananda/netlink"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/transform"
+
+	"loadroutes/router"
 )
 
 var (
@@ -26,47 +25,26 @@ var (
 	date    = "unknown"
 )
 
-const DNS_TIMEOUT_SEC = 1
-
-var done int
-
-func add(iface netlink.Link, ips []*net.IPNet, ip6 bool, logRadix int) {
-	for _, ipNet := range ips {
-		ip := (*ipNet).IP // hack for error reporting because AddIP nullifies struct after call
-		if !ip6 && ip.To4() == nil {
-			continue
-		}
-		if err := route.AddIP(iface, ipNet); err != nil {
-			log.Printf("Adding %v: %s", ip, err)
-			continue
-		}
-
-		done++
-		if done%logRadix == 0 {
-			log.Println(done)
-		}
-	}
-}
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	log.Println("Loadroutes", version, date)
 
-	ifaceName := flag.String("iface", "", "Network interface name (required)")
+	iface := flag.String("iface", "", "Network interface name (required)")
 	input := flag.String("input", "", "Path to input dump file (see https://github.com/zapret-info/z-i) (required)")
-	dnsName := flag.String("dns", "", "DNS server (if not specified no DNS resolution performed)")
+	dns := flag.String("dns", "", "DNS server (if not specified no DNS resolution performed)")
 	ip6 := flag.Bool("ip6", false, "Process IPv6 addresses as well (if not specified, IPv4 is used only)")
 
 	flag.Parse()
 
-	if *ifaceName == "" || *input == "" {
+	if *iface == "" || *input == "" {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	log.Printf("Input file: %s, iface: %s, DNS: %s\n", *input, *ifaceName, *dnsName)
-	if *dnsName == "" {
+	log.Printf("Input file: %s, iface: %s, DNS: %s\n", *input, *iface, *dns)
+	if *dns == "" {
 		log.Println("No DNS server specified, DNS resolution will not be perfomed")
 	}
 
@@ -75,30 +53,28 @@ func main() {
 		log.Fatal(err)
 	}
 	defer file.Close()
-
 	reader := bufio.NewReader(transform.NewReader(file, charmap.Windows1251.NewDecoder()))
 
 	ips, namesMap := parse.Parse(reader)
 	log.Printf("Parsed: ip addresses: %d, dns names: %d\n", len(ips), len(namesMap))
-
-	iface, err := netlink.LinkByName(*ifaceName)
+	router, err := route.NewRouter(*iface, *ip6)
 	if err != nil {
-		log.Fatalf("No such network interface: %s", *ifaceName)
+		log.Fatalf("Initializing router: %s", err)
 	}
+	router.Add(ips, 100000)
 
-	add(iface, ips, *ip6, 100000)
-
-	if *dnsName == "" {
+	if *dns == "" {
 		return
 	}
 
-	dnsResolver := net.Resolver{
-		PreferGo: true,
-		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			d := net.Dialer{}
-			return d.DialContext(ctx, network, *dnsName+":53")
-		},
-	}
+	names := make(chan string)
+	wgNames := sync.WaitGroup{}
+
+	addresses := make(chan []*net.IPNet, 1000000)
+	wgAddresses := sync.WaitGroup{}
+
+	resolver.NewResolver(*dns, *ip6, 100).Start(&wgNames, names, addresses)
+	router.Start(&wgAddresses, addresses, 100)
 
 	// resolve in order of domain length (on presumption that the shorter domain, the more important it is)
 	namesSlice := make([]string, 0, len(namesMap))
@@ -108,19 +84,12 @@ func main() {
 	sort.Slice(namesSlice, func(i, j int) bool {
 		return len(namesSlice[i]) < len(namesSlice[j])
 	})
-
-	var resolutionErrs int
 	for _, name := range namesSlice {
-		ctx, cancelFn := context.WithTimeout(context.Background(), time.Second*DNS_TIMEOUT_SEC)
-		defer cancelFn()
-		ips, err := resolver.Resolve(ctx, &dnsResolver, name, *ip6)
-		if err != nil {
-			resolutionErrs++
-			if resolutionErrs%100 == 0 {
-				log.Printf("DNS resolution errors so far: %d, last error: %s", resolutionErrs, err)
-			}
-			continue
-		}
-		add(iface, ips, *ip6, 100)
+		names<-name
 	}
+
+	close(names)
+	wgNames.Wait()
+	close(addresses)
+	wgAddresses.Wait()
 }
