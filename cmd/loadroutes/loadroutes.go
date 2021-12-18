@@ -61,7 +61,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Initializing router: %s", err)
 	}
-	router.Add(ips, 100000)
+	err = router.Add(ips, 100000)
+	if  err != nil {
+		log.Fatalf("Adding routes: %s", err)
+	}
 
 	if *dns == "" {
 		return
@@ -70,11 +73,11 @@ func main() {
 	names := make(chan string)
 	wgNames := sync.WaitGroup{}
 
-	addresses := make(chan []*net.IPNet, 1000000)
+	addresses := make(chan []*net.IPNet)
 	wgAddresses := sync.WaitGroup{}
 
 	resolver.NewResolver(*dns, *ip6, 100).Start(&wgNames, names, addresses)
-	router.Start(&wgAddresses, addresses, 100)
+	router.Start(&wgAddresses, addresses, 500)
 
 	// resolve in order of domain length (on presumption that the shorter domain, the more important it is)
 	namesSlice := make([]string, 0, len(namesMap))

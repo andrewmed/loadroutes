@@ -38,11 +38,12 @@ func (self *Router) Add(ips []*net.IPNet, logRadix int) error {
 			Dst:       ipNet,
 			LinkIndex: self.link.Attrs().Index,
 		}
-		if err := netlink.RouteAdd(&route); err != nil {
+		if err := netlink.RouteReplace(&route); err != nil {
 			if os.IsPermission(err) {
 				return fmt.Errorf("no permissions")
 			}
 			log.Printf("Adding %v: %s", ip, err)
+			continue
 		}
 		self.processed++
 		if self.processed%logRadix == 0 {
